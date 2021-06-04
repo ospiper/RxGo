@@ -1111,44 +1111,44 @@ func (op *firstOrDefaultOperator) gatherNext(_ context.Context, _ Item, _ chan<-
 
 // FlatMap transforms the items emitted by an Observable into Observables, then flatten the emissions from those into a single Observable.
 func (o *ObservableImpl) FlatMap(apply ItemToObservable, opts ...Option) Observable {
-	f := func(ctx context.Context, next chan Item, option Option, opts ...Option) {
-		defer close(next)
-		observe := o.Observe(opts...)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case item, ok := <-observe:
-				if !ok {
-					return
-				}
-				observe2 := apply(item).Observe(opts...)
-			loop2:
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case item, ok := <-observe2:
-						if !ok {
-							break loop2
-						}
-						if item.Error() {
-							item.SendContext(ctx, next)
-							if option.getErrorStrategy() == StopOnError {
-								return
-							}
-						} else {
-							if !item.SendContext(ctx, next) {
-								return
-							}
-						}
-					}
-				}
+	return observable(o, func() operator {
+		return &flatMapOperator{apply: apply}
+	}, false, true, opts...)
+}
+
+type flatMapOperator struct {
+	apply ItemToObservable
+}
+
+func (op *flatMapOperator) next(ctx context.Context, item Item, next chan<- Item, operatorOptions operatorOptions) {
+	ob := op.apply(item)
+	observe := ob.Observe()
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case item, ok := <-observe:
+			if !ok {
+				break loop
+			}
+			item.SendContext(ctx, next)
+			if item.Error() {
+				operatorOptions.stop()
+				break loop
 			}
 		}
 	}
+}
 
-	return customObservableOperator(f, opts...)
+func (op *flatMapOperator) err(ctx context.Context, item Item, next chan<- Item, operatorOptions operatorOptions) {
+	op.next(ctx, item, next, operatorOptions)
+}
+
+func (op *flatMapOperator) end(_ context.Context, _ chan<- Item) {
+}
+
+func (op *flatMapOperator) gatherNext(_ context.Context, _ Item, _ chan<- Item, _ operatorOptions) {
 }
 
 // ForEach subscribes to the Observable and receives notifications for each element.

@@ -797,7 +797,7 @@ func Test_Observable_FlatMap_Error2(t *testing.T) {
 	Assert(ctx, t, obs, HasItems(2, 10, 0, 4, 30), HasNoError())
 }
 
-func Test_Observable_FlatMap_Parallel(t *testing.T) {
+func Test_Observable_FlatMap_Parallel1(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -805,6 +805,22 @@ func Test_Observable_FlatMap_Parallel(t *testing.T) {
 		return testObservable(ctx, i.V.(int)+1, i.V.(int)*10)
 	}, WithCPUPool())
 	Assert(ctx, t, obs, HasItemsNoOrder(2, 10, 3, 20, 4, 30))
+}
+
+func Test_Observable_FlatMap_Parallel2(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	obs := testObservable(ctx, 1, 2, 3).FlatMap(func(i Item) Observable {
+		time.Sleep(time.Duration(i.V.(int)) * time.Millisecond * 100)
+		return testObservable(ctx, i.V.(int)+1, i.V.(int)*10)
+	}, WithPool(3))
+	startAt := time.Now()
+	Assert(ctx, t, obs, HasItemsNoOrder(2, 10, 3, 20, 4, 30))
+	duration := time.Since(startAt).Milliseconds()
+	if duration >= 400 {
+		assert.Failf(t, "costs too long", "duration: %v", duration)
+	}
 }
 
 func Test_Observable_FlatMap_Parallel_Error1(t *testing.T) {
