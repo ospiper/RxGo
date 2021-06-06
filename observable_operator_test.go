@@ -797,6 +797,19 @@ func Test_Observable_FlatMap_Error2(t *testing.T) {
 	Assert(ctx, t, obs, HasItems(2, 10, 0, 4, 30), HasNoError())
 }
 
+func Test_Observable_FlatMap_Error3(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	obs := testObservable(ctx, 1, 2, 3).FlatMap(func(i Item) Observable {
+		if i.V == 2 {
+			return testObservable(ctx, errFoo, i.V)
+		}
+		return testObservable(ctx, i.V.(int)+1, i.V.(int)*10)
+	}, WithErrorStrategy(ContinueOnError))
+	Assert(ctx, t, obs, HasItems(2, 10, 4, 30), HasError(errFoo))
+}
+
 func Test_Observable_FlatMap_Parallel1(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx, cancel := context.WithCancel(context.Background())

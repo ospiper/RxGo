@@ -1112,17 +1112,18 @@ func (op *firstOrDefaultOperator) gatherNext(_ context.Context, _ Item, _ chan<-
 // FlatMap transforms the items emitted by an Observable into Observables, then flatten the emissions from those into a single Observable.
 func (o *ObservableImpl) FlatMap(apply ItemToObservable, opts ...Option) Observable {
 	return observable(o, func() operator {
-		return &flatMapOperator{apply: apply}
+		return &flatMapOperator{apply: apply, opts: opts}
 	}, false, true, opts...)
 }
 
 type flatMapOperator struct {
 	apply ItemToObservable
+	opts  []Option
 }
 
 func (op *flatMapOperator) next(ctx context.Context, item Item, next chan<- Item, operatorOptions operatorOptions) {
 	ob := op.apply(item)
-	observe := ob.Observe()
+	observe := ob.Observe(op.opts...)
 loop:
 	for {
 		select {
